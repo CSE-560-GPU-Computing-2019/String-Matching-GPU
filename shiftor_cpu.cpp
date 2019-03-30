@@ -6,7 +6,7 @@
 
 using namespace std;
 
-#define DEBUG
+// #define DEBUG
 
 #define WORD 32
 #define ALPHABET_INITIAL ' '
