@@ -159,10 +159,10 @@ int main(int argc, char const *argv[])
 	fclose(t_fp);
 	fclose(p_fp);
 
-	cout << t_len << endl;
-	cout << text << endl;
-	cout << p_len << endl;
-	cout << pattern << endl;
+	// cout << t_len << endl;
+	// cout << text << endl;
+	// cout << p_len << endl;
+	// cout << pattern << endl;
 
 	unsigned int convText[t_len];
 	mapStringToInt(text, convText, t_len);
