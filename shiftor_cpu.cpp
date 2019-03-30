@@ -1,7 +1,7 @@
 #include <iostream>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string>
-#include <assert.h>
 #include <bitset>
 
 using namespace std;
@@ -27,13 +27,27 @@ char UintToChar(unsigned int i)
 	return (char)(i) + ALPHABET_INITIAL;
 }
 
+char bringInRange(char c)
+{
+	if(c > ALPHABET_FINAL || c < ALPHABET_INITIAL)
+	{
+		// cout << c << " " << charToUInt(c) << endl;
+		return ' ';
+	}
+	return c;
+}
+
 void mapStringToInt(char input[], unsigned int converted[], size_t length)
 {
 	// printf("%lu\n", length);
 
 	for (int i = 0; i < length; ++i)
 	{
-		assert(input[i] <= ALPHABET_FINAL);
+		if(input[i] > ALPHABET_FINAL || input[i] < ALPHABET_INITIAL)
+		{
+			printf("Error: String contains invalid characters\n");
+			exit(0);
+		}
 		converted[i] = charToUInt(input[i]);
 
 		// printf("%u\n", converted[i]);
@@ -41,7 +55,7 @@ void mapStringToInt(char input[], unsigned int converted[], size_t length)
 	return;
 }
 
-void preSO(unsigned int pattern[], int p_len, unsigned int S[])
+void preSO(unsigned int *pattern, int p_len, unsigned int *S)
 {
 	for (int i = 0; i < ASIZE; ++i)
 	{
@@ -61,7 +75,7 @@ void preSO(unsigned int pattern[], int p_len, unsigned int S[])
 	return;
 }
 
-void shiftOR(unsigned int pattern[], int p_len, unsigned int text[], int t_len)
+void shiftOR(unsigned int *pattern, int p_len, unsigned int *text, int t_len)
 {
 	unsigned int state;
 	unsigned int S[ASIZE];
@@ -96,11 +110,59 @@ void shiftOR(unsigned int pattern[], int p_len, unsigned int text[], int t_len)
 
 int main(int argc, char const *argv[])
 {
-	char text[] = "test string is the best";
-	size_t t_len = sizeof(text)/sizeof(char) - 1;
+	if(argc != 3)
+	{
+		printf("Usage: %s <path/to/text/file> <path/to/pattern/file>\n", argv[0]);
+		exit(0);
+	}
 
-	char pattern[] = "est";
-	size_t p_len = sizeof(pattern)/sizeof(char) - 1;
+	FILE *t_fp = fopen(argv[1],"r");
+	if (!t_fp)
+	{
+		printf("Unable to open text file.\n");
+		exit(0);
+	}
+
+	FILE *p_fp = fopen(argv[2],"r");
+	if (!p_fp)
+	{
+		printf("Unable to open pattern file.\n");
+		exit(0);
+	}
+
+	size_t t_len = -1, p_len = -1;
+	while (getc(t_fp) != EOF)
+	{
+		t_len++;
+	}
+	rewind(t_fp);
+
+	while (getc(p_fp) != EOF)
+	{
+		p_len++;
+	}
+	rewind(p_fp);
+
+	char *text = (char *) malloc(t_len);
+	char *pattern = (char *) malloc(p_len);
+
+	for (int l = 0; l < p_len; l++)
+	{
+		pattern[l] = bringInRange(getc(p_fp));
+	}
+
+	for (int l = 0; l < t_len; l++)
+	{
+		text[l] = bringInRange(getc(t_fp));
+	}
+
+	fclose(t_fp);
+	fclose(p_fp);
+
+	cout << t_len << endl;
+	cout << text << endl;
+	cout << p_len << endl;
+	cout << pattern << endl;
 
 	unsigned int convText[t_len];
 	mapStringToInt(text, convText, t_len);
@@ -108,6 +170,10 @@ int main(int argc, char const *argv[])
 	unsigned int convPattern[p_len];
 	mapStringToInt(pattern, convPattern, p_len);
 
+	free(text);
+	free(pattern);
+
 	shiftOR(convPattern, p_len, convText, t_len);
+
 	return 0;
 }
