@@ -12,7 +12,7 @@ using namespace std;
 #define ALPHABET_INITIAL ' '
 #define ALPHABET_FINAL 'z'
 #define ASIZE (int) (ALPHABET_FINAL - ALPHABET_INITIAL + 1)
-#define k 1
+#define k 3
 #define shift(x) 1 << (31 - x)
 
 char bringInRange(char c)
@@ -27,9 +27,11 @@ char bringInRange(char c)
 
 void WuManber(char *pattern, int p_len, char *text, int t_len, int cas)
 {
-	unsigned int state;
-	unsigned int S[ASIZE];
-	int hit;
+	// cout << t_len << endl;
+	// cout << text << endl;
+	// cout << p_len << endl;
+	// cout << pattern << endl;
+	// cout << cas << endl;
 
 	if(p_len > WORD - 1)
 	{
@@ -37,34 +39,38 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int cas)
 		return;
 	}
 
-	unsigned int alphabets[256];
+	int alphabets[256];
 
-	if(cas)
+	if(cas == 1)
 	{
 		for(int i = 0; i < p_len; i++)
+		{
 			alphabets[pattern[i]] = alphabets[pattern[i]] | shift(i);
+		}
 	}
 	else
 	{
 		for(int i = 0; i < p_len; i++)
 		{
-			if((unsigned short) i >= 'A' && (unsigned short) i <= 'Z')
-				alphabets[((unsigned int short)pattern[i] - 'A' + 'a')] = alphabets[((unsigned int short)pattern[i] - 'A' + 'a')] | shift(i);
+			if(pattern[i] >= 'A' && pattern[i] <= 'Z')
+				alphabets[(pattern[i] - 'A' + 'a')] = alphabets[(pattern[i] - 'A' + 'a')] | shift(i);
 			else
 				alphabets[pattern[i]] = alphabets[pattern[i]] | shift(i);
 		}		
 	}
 
-	int R[k][t_len+1];
+	int R[k+1][t_len+1];
 
 	for(int i = 0; i <= k; i++)
 		R[i][0] = 0;
 
 	for(int i = 1; i <= t_len; i++)
-		R[0][i] = alphabets[text[i-1]] & ((R[0][i-1] >> 1 ) | shift(0));
+		R[0][i] = alphabets[text[i-1]] & ((R[0][i-1] << 1 ) | shift(0));
 
 	for(int i = 1; i <= k; i++)
 	{
+		// R[i][0] |= shift(i);
+
 		for(int j = 0; j < i; j++)
 			R[j][0] = R[j][0] | shift(j);
 	}
@@ -73,12 +79,15 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int cas)
 	{
 		for(int j = 1; j <= t_len; j++)
 		{
-			R[i][j] = ((R[i][j-1] >> 1) & alphabets[text[j-1]]) |
-					  R[i-1][j-1] |
-					  (R[i-1][j] >> 1) |
-					  (R[i-1][j-1] >> 1) | shift(0);
+			R[i][j] = (((R[i][j-1] << 1) | shift(0)) & alphabets[text[j-1]]) |
+					  (R[i-1][j-1] |
+					  (R[i-1][j] << 1) |
+					  (R[i-1][j-1] << 1)) ;
 		}
 	}
+
+	for(int i = 0; i <= t_len; i++)
+		cout<<R[k][i]<<" "<<text[i]<<endl;
 }
 
 int main(int argc, char const *argv[])
@@ -115,6 +124,8 @@ int main(int argc, char const *argv[])
 		p_len++;
 	}
 	rewind(p_fp);
+	p_len++;
+	t_len++;
 
 	char *text = (char *) malloc(t_len);
 	char *pattern = (char *) malloc(p_len);
@@ -134,7 +145,9 @@ int main(int argc, char const *argv[])
 
 	int cas;
 
-	scanf("Case Sensitive(Yes - 1, No - 0): %d", cas);
+	cout<<"Case Sensitive(Yes - 1, No - 0): ";
+
+	scanf("%d", &cas);
 
 	WuManber(pattern, p_len, text, t_len, cas);
 
