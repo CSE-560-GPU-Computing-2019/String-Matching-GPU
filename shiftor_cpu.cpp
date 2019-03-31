@@ -39,8 +39,6 @@ char bringInRange(char c)
 
 void mapStringToInt(char input[], unsigned int converted[], size_t length)
 {
-	// printf("%lu\n", length);
-
 	for (int i = 0; i < length; ++i)
 	{
 		if(input[i] > ALPHABET_FINAL || input[i] < ALPHABET_INITIAL)
@@ -49,8 +47,6 @@ void mapStringToInt(char input[], unsigned int converted[], size_t length)
 			exit(0);
 		}
 		converted[i] = charToUInt(input[i]);
-
-		// printf("%u\n", converted[i]);
 	}
 	return;
 }
@@ -89,6 +85,10 @@ void shiftOR(unsigned int *pattern, int p_len, unsigned int *text, int t_len)
 
 	/* pre-processing */
 	preSO(pattern, p_len, S);
+
+	#ifdef DEBUG
+		cout << "Pre-processing Done\n";
+	#endif
 
 	/* searching */
 	state = ~0;
@@ -164,7 +164,7 @@ int main(int argc, char const *argv[])
 	// cout << p_len << endl;
 	// cout << pattern << endl;
 
-	unsigned int convText[t_len];
+	unsigned int* convText = new unsigned int[t_len];
 	mapStringToInt(text, convText, t_len);
 
 	unsigned int convPattern[p_len];
@@ -172,8 +172,9 @@ int main(int argc, char const *argv[])
 
 	free(text);
 	free(pattern);
-
 	shiftOR(convPattern, p_len, convText, t_len);
+
+	delete [] convText;
 
 	return 0;
 }
