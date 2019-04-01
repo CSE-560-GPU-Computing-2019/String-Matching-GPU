@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string>
 #include <bitset>
+#include <ctime>
 
 using namespace std;
 
@@ -77,6 +78,8 @@ void shiftOR(unsigned int *pattern, int p_len, unsigned int *text, int t_len)
 	unsigned int S[ASIZE];
 	int hit;
 
+	int ctr = 0;
+
 	if(p_len > WORD)
 	{
 		perror("Error: Use pattern length <= word size");
@@ -103,9 +106,12 @@ void shiftOR(unsigned int *pattern, int p_len, unsigned int *text, int t_len)
 
 		if(!(state & hit))
 		{
-			cout << "Found at position " <<  i - p_len + 1 << endl;
+			// cout << "Found at position " <<  i - p_len + 1 << endl;
+			ctr++;
 		}
 	}
+
+	cout << "Count: " << ctr << endl;
 }
 
 int main(int argc, char const *argv[])
@@ -172,7 +178,11 @@ int main(int argc, char const *argv[])
 
 	free(text);
 	free(pattern);
+
+	const clock_t begin_time = clock();
 	shiftOR(convPattern, p_len, convText, t_len);
+	float runTime = (float)( clock() - begin_time ) /  CLOCKS_PER_SEC;
+	printf("CPU Time for matching keywords: %fms\n", runTime*1000);
 
 	delete [] convText;
 

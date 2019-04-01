@@ -1,11 +1,11 @@
-all: shiftor_cpu wumanber_cpu
+all: shiftor wumanber_cpu
 
-shiftor_cpu: shiftor_cpu.cpp
-	g++ shiftor_cpu.cpp -o shiftor_cpu
+shiftor: shiftor.cu
+	nvcc shiftor.cu -o shiftor
 
 wumanber_cpu: wumanber_cpu.cpp
 	g++ wumanber_cpu.cpp -o wumanber_cpu
 
 clean:
-	rm shiftor_cpu
+	rm shiftor
 	rm wumanber_cpu
