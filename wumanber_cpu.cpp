@@ -12,8 +12,9 @@ using namespace std;
 #define ALPHABET_INITIAL ' '
 #define ALPHABET_FINAL 'z'
 #define ASIZE (int) (ALPHABET_FINAL - ALPHABET_INITIAL + 1)
-#define k 3
+// #define k 1
 #define shift(x) 1 << (31 - x)
+#define CHAR_MAX 255
 
 char bringInRange(char c)
 {
@@ -25,7 +26,7 @@ char bringInRange(char c)
 	return c;
 }
 
-void WuManber(char *pattern, int p_len, char *text, int t_len, int cas)
+void WuManber(char *pattern, int p_len, char *text, int t_len, int k)
 {
 	// cout << t_len << endl;
 	// cout << text << endl;
@@ -39,55 +40,53 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int cas)
 		return;
 	}
 
-	int alphabets[256];
+	unsigned long alphabets[256];
 
-	if(cas == 1)
+	for(int i = 0; i < 256; i++)
 	{
-		for(int i = 0; i < p_len; i++)
-		{
-			alphabets[pattern[i]] = alphabets[pattern[i]] | shift(i);
-		}
-	}
-	else
-	{
-		for(int i = 0; i < p_len; i++)
-		{
-			if(pattern[i] >= 'A' && pattern[i] <= 'Z')
-				alphabets[(pattern[i] - 'A' + 'a')] = alphabets[(pattern[i] - 'A' + 'a')] | shift(i);
-			else
-				alphabets[pattern[i]] = alphabets[pattern[i]] | shift(i);
-		}		
+		alphabets[i] = ~0;
 	}
 
-	int R[k+1][t_len+1];
+	for(int i = 0 ; i < p_len; i++)
+		alphabets[pattern[i]] = alphabets[pattern[i]] & ~(1UL << i);
+	
+	unsigned long R[k+1];
 
 	for(int i = 0; i <= k; i++)
-		R[i][0] = 0;
+		R[i] = ~1;
 
-	for(int i = 1; i <= t_len; i++)
-		R[0][i] = alphabets[text[i-1]] & ((R[0][i-1] << 1 ) | shift(0));
+	unsigned long temptextstore, temperrorstore;
 
-	for(int i = 1; i <= k; i++)
+	for (int i = 0; i < t_len; i++)
 	{
-		// R[i][0] |= shift(i);
+		temptextstore = R[0];
 
-		for(int j = 0; j < i; j++)
-			R[j][0] = R[j][0] | shift(j);
-	}
+		R[0] = (R[0] | alphabets[text[i]]) << 1;
 
-	for (int i = 1; i <= k; i++)
-	{
-		for(int j = 1; j <= t_len; j++)
+		for(int j = 1; j <= k; j++)
 		{
-			R[i][j] = (((R[i][j-1] << 1) | shift(0)) & alphabets[text[j-1]]) |
-					  (R[i-1][j-1] |
-					  (R[i-1][j] << 1) |
-					  (R[i-1][j-1] << 1)) ;
-		}
-	}
+			temperrorstore = R[j];
 
-	for(int i = 0; i <= t_len; i++)
-		cout<<R[k][i]<<" "<<text[i]<<endl;
+			R[j] |= alphabets[text[i]];
+			R[j] &= temptextstore;
+			R[j] <<= 1;
+
+			temptextstore = (((R[j] << 1) | shift(0)) & alphabets[text[i]]) |
+					  (R[j-1] |
+					  (R[j] << 1) |
+					  (R[j-1] << 1)) ;
+
+			temptextstore ^= (temperrorstore ^ temptextstore);
+
+			temptextstore = temperrorstore;
+		}
+
+		temptextstore = 1UL << p_len;
+		temptextstore &= R[k];
+
+		if((~temptextstore) == -1)
+			cout<<(i + 1 - p_len)<<endl;
+	}
 }
 
 int main(int argc, char const *argv[])
@@ -124,8 +123,6 @@ int main(int argc, char const *argv[])
 		p_len++;
 	}
 	rewind(p_fp);
-	p_len++;
-	t_len++;
 
 	char *text = (char *) malloc(t_len);
 	char *pattern = (char *) malloc(p_len);
@@ -143,16 +140,23 @@ int main(int argc, char const *argv[])
 	fclose(t_fp);
 	fclose(p_fp);
 
-	int cas;
+	// cout << t_len << endl;
+	// cout << text << endl;
+	// cout << p_len << endl;
+	// cout << pattern << endl;
 
-	cout<<"Case Sensitive(Yes - 1, No - 0): ";
+	// unsigned int* convText = new unsigned int[t_len];
+	// mapStringToInt(text, convText, t_len);
 
-	scanf("%d", &cas);
+	// unsigned int convPattern[p_len];
+	// mapStringToInt(pattern, convPattern, p_len);
 
-	WuManber(pattern, p_len, text, t_len, cas);
+	WuManber(pattern, p_len, text, t_len, 1);
 
 	free(text);
 	free(pattern);
+
+	// delete [] convText;
 
 	return 0;
 }
