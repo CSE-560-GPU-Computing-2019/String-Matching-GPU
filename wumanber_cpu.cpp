@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -26,7 +27,7 @@ char bringInRange(char c)
 	return c;
 }
 
-void WuManber(char *pattern, int p_len, char *text, int t_len, int k)
+int WuManber(char *pattern, int p_len, char *text, int t_len, int k)
 {
 	// cout << t_len << endl;
 	// cout << text << endl;
@@ -34,12 +35,7 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int k)
 	// cout << pattern << endl;
 	// cout << cas << endl;
 
-	if(p_len > WORD - 1)
-	{
-		perror("Error: Use pattern length <= word size");
-		return;
-	}
-
+	unsigned int ctr = 0;
 	unsigned long alphabets[256];
 
 	for(int i = 0; i < 256; i++)
@@ -48,8 +44,10 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int k)
 	}
 
 	for(int i = 0 ; i < p_len; i++)
+	{
 		alphabets[pattern[i]] = alphabets[pattern[i]] & ~(1UL << i);
-	
+	}
+
 	unsigned long R[k+1];
 
 	for(int i = 0; i <= k; i++)
@@ -77,7 +75,6 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int k)
 					  (R[j-1] << 1)) ;
 
 			temptextstore ^= (temperrorstore ^ temptextstore);
-
 			temptextstore = temperrorstore;
 		}
 
@@ -85,15 +82,19 @@ void WuManber(char *pattern, int p_len, char *text, int t_len, int k)
 		temptextstore &= R[k];
 
 		if((~temptextstore) == -1)
-			cout<<(i + 1 - p_len)<<endl;
+		{
+			ctr += 1;
+			// cout<<(i + 1 - p_len)<<endl;
+		}
 	}
+	return ctr;
 }
 
 int main(int argc, char const *argv[])
 {
-	if(argc != 3)
+	if(argc != 4)
 	{
-		printf("Usage: %s <path/to/text/file> <path/to/pattern/file>\n", argv[0]);
+		printf("Usage: %s <path/to/text/file> <path/to/pattern/file> <k = max error>\n", argv[0]);
 		exit(0);
 	}
 
@@ -110,6 +111,12 @@ int main(int argc, char const *argv[])
 		printf("Unable to open pattern file.\n");
 		exit(0);
 	}
+	const char* value = "1234567";
+	stringstream strValue;
+	strValue << argv[3];
+
+	unsigned int k;
+	strValue >> k;
 
 	size_t t_len = -1, p_len = -1;
 	while (getc(t_fp) != EOF)
@@ -140,23 +147,26 @@ int main(int argc, char const *argv[])
 	fclose(t_fp);
 	fclose(p_fp);
 
+	if(p_len > WORD)
+	{
+		perror("Error: Use pattern length <= word size");
+		return 0;
+	}
+
 	// cout << t_len << endl;
 	// cout << text << endl;
 	// cout << p_len << endl;
 	// cout << pattern << endl;
 
-	// unsigned int* convText = new unsigned int[t_len];
-	// mapStringToInt(text, convText, t_len);
+	const clock_t begin_time = clock();
+	int count = WuManber(pattern, p_len, text, t_len, k);
+	float runTime = (float)( clock() - begin_time ) /  CLOCKS_PER_SEC;
 
-	// unsigned int convPattern[p_len];
-	// mapStringToInt(pattern, convPattern, p_len);
-
-	WuManber(pattern, p_len, text, t_len, 1);
+	printf("CPU found %d matches with an edit distance of upto %u characters\n", count, k);
+	printf("CPU Time for matching keywords: %fms\n\n", runTime*1000);
 
 	free(text);
 	free(pattern);
-
-	// delete [] convText;
 
 	return 0;
 }
