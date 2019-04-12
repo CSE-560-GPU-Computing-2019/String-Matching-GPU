@@ -26,7 +26,7 @@ __device__ unsigned int dagger2(unsigned int u1, unsigned int x1, unsigned int u
 	return (x1 << u2) | x2;
 }
 
-__global__ void shiftOR_GPU(unsigned int *pattern, int p_len, unsigned int *text, int t_len, unsigned int *AF, unsigned int *AS)
+__global__ void shiftOR_GPU(unsigned int *AF, unsigned int *AS)
 {
 	__shared__ int shared_AF[THREADS_PER_BLOCK];
 	__shared__ int shared_AS[THREADS_PER_BLOCK];
@@ -274,6 +274,22 @@ int main(int argc, const char **argv)
 
 
 	/****** GPU Execution ********/
+	// unsigned int* d_M;
+	unsigned int* d_AF;
+	unsigned int* d_AS;
+	// unsigned int* d_convText;
+	// unsigned int* d_convPattern;
+
+	// cudaMalloc(&d_M, t_len * sizeof(unsigned int));
+	cudaMalloc(&d_AF, t_len * sizeof(unsigned int));
+	cudaMalloc(&d_AS, t_len * sizeof(unsigned int));
+
+	// cudaMalloc(&d_convText, t_len * sizeof(unsigned int));
+	// cudaMalloc(&d_convPattern, p_len * sizeof(unsigned int));
+
+	cudaEvent_t start, stop;
+	float elapsedTime;
+
 	for(int j = 0; j < t_len; j++)
 	{
 		M[j] = 0;
@@ -297,45 +313,28 @@ int main(int argc, const char **argv)
 			AF[j] = 1;
 			AS[j] = M[j];
 		}
-
 		// cout << bitset<32>(M[j]) << endl;
 	}
-
-	unsigned int* d_M;
-	unsigned int* d_AF;
-	unsigned int* d_AS;
-	unsigned int* d_convText;
-	unsigned int* d_convPattern;
-
-	cudaMalloc(&d_M, t_len * sizeof(unsigned int));
-	cudaMalloc(&d_AF, t_len * sizeof(unsigned int));
-	cudaMalloc(&d_AS, t_len * sizeof(unsigned int));
-
-	cudaMalloc(&d_convText, t_len * sizeof(unsigned int));
-	cudaMalloc(&d_convPattern, p_len * sizeof(unsigned int));
-
-	cudaMemcpy(d_M, M, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_AF, AF, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_AS, AS, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-
-	cudaMemcpy(d_convText, convText, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_convPattern, convPattern, p_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-
-	cudaEvent_t start, stop;
-	float elapsedTime;
 
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	cudaEventRecord(start,0);
 
-	shiftOR_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_convPattern, p_len, d_convText, t_len, d_AF, d_AS);
+	// cudaMemcpy(d_M, M, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_AF, AF, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_AS, AS, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+
+	// cudaMemcpy(d_convText, convText, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	// cudaMemcpy(d_convPattern, convPattern, p_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+
+	shiftOR_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_AF, d_AS);
+
+	cudaMemcpy(AF, d_AF, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	cudaMemcpy(AS, d_AS, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start,stop);
-
-	cudaMemcpy(AF, d_AF, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(AS, d_AS, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
 	printf("GPU found %d matches	\n", count);
 	printf("GPU Time for matching keywords: %fms\n", elapsedTime);
@@ -346,9 +345,9 @@ int main(int argc, const char **argv)
 	delete [] AF;
 	delete [] AS;
 
-	cudaFree(d_convText);
-	cudaFree(d_convPattern);
-	cudaFree(d_M);
+	// cudaFree(d_convText);
+	// cudaFree(d_convPattern);
+	// cudaFree(d_M);
 	cudaFree(d_AF);
 	cudaFree(d_AS);
 
