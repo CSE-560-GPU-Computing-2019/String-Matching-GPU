@@ -337,7 +337,7 @@ int main(int argc, const char **argv)
 	cudaMemcpy(AF, d_AF, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 	cudaMemcpy(AS, d_AS, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
-	printf("CPU found %d matches	\n", count);
+	printf("GPU found %d matches	\n", count);
 	printf("GPU Time for matching keywords: %fms\n", elapsedTime);
 
 
