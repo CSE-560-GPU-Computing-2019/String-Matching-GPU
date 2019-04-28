@@ -15,6 +15,7 @@ using namespace std;
 #define ASIZE (int) (ALPHABET_FINAL - ALPHABET_INITIAL + 1)
 
 #define THREADS_PER_BLOCK 1024
+#define MAX_P_LEN 32
 
 __device__ unsigned int dagger1(unsigned int u1, unsigned int x1, unsigned int u2, unsigned int x2)
 {
@@ -26,16 +27,34 @@ __device__ unsigned int dagger2(unsigned int u1, unsigned int x1, unsigned int u
 	return (x1 << u2) | x2;
 }
 
-__global__ void shiftOR_GPU(unsigned int *AF, unsigned int *AS)
+__global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *convPattern, int p_len)
 {
-	__shared__ int shared_AF[THREADS_PER_BLOCK];
-	__shared__ int shared_AS[THREADS_PER_BLOCK];
+	__shared__ unsigned int shared_convPattern[MAX_P_LEN];
+	__shared__ int AF[THREADS_PER_BLOCK];
+	__shared__ int AS[THREADS_PER_BLOCK];
 
 	unsigned int src_index = blockIdx.x * blockDim.x + threadIdx.x;
-	// unsigned int dst_index = threadIdx.x % THREADS_PER_WARP;
 
-	shared_AF[threadIdx.x] = AF[src_index];
-	shared_AS[threadIdx.x] = AS[src_index];
+	if(threadIdx.x < p_len)
+		shared_convPattern[threadIdx.x] = convPattern[threadIdx.x];
+
+	__syncthreads();
+
+	AF[threadIdx.x] = 1;
+	AS[threadIdx.x] = 0;
+	for (int i = 0; i < p_len; ++i)
+	{
+		if(convText[src_index] == shared_convPattern[i])
+			AS[threadIdx.x] |= 1 << i;
+	}
+
+	AS[threadIdx.x] = ~AS[threadIdx.x];
+
+	if(threadIdx.x == 0 && blockIdx.x == 0)
+	{
+		AF[threadIdx.x] = 0;
+		AS[threadIdx.x] = ~0;
+	}
 
 	// if (threadIdx.x == THREADS_PER_BLOCK - 1)
 	// 	data[THREADS_PER_BLOCK * 1] = d_text[src_index + 1 * THREADS_PER_BLOCK - THREADS_PER_BLOCK + 1];
@@ -49,11 +68,11 @@ __global__ void shiftOR_GPU(unsigned int *AF, unsigned int *AS)
 		int index = (threadIdx.x+1)*stride*2 - 1;
 		if(index < THREADS_PER_BLOCK)
 		{
-			unsigned int tempF = dagger1(shared_AF[index], shared_AS[index], shared_AF[index-stride], shared_AS[index-stride]);
-			unsigned int tempS = dagger1(shared_AF[index], shared_AS[index], shared_AF[index-stride], shared_AS[index-stride]);
+			unsigned int tempF = dagger1(AF[index], AS[index], AF[index-stride], AS[index-stride]);
+			unsigned int tempS = dagger1(AF[index], AS[index], AF[index-stride], AS[index-stride]);
 
-			shared_AF[index] = tempF;
-			shared_AS[index] = tempS;
+			AF[index] = tempF;
+			AS[index] = tempS;
 		}
 		stride = stride*2;
 
@@ -66,19 +85,19 @@ __global__ void shiftOR_GPU(unsigned int *AF, unsigned int *AS)
 		int index = (threadIdx.x+1)*stride*2 - 1;
 		if(index + stride < THREADS_PER_BLOCK)
 		{
-			unsigned int tempF = dagger1(shared_AF[index+stride], shared_AS[index+stride], shared_AF[index], shared_AS[index]);
-			unsigned int tempS = dagger1(shared_AF[index+stride], shared_AS[index+stride], shared_AF[index], shared_AS[index]);
+			unsigned int tempF = dagger1(AF[index+stride], AS[index+stride], AF[index], AS[index]);
+			unsigned int tempS = dagger1(AF[index+stride], AS[index+stride], AF[index], AS[index]);
 
-			shared_AF[index] = tempF;
-			shared_AS[index] = tempS;
+			AF[index] = tempF;
+			AS[index] = tempS;
 		}
 		stride = stride / 2;
 		__syncthreads();
 	}
 
-	AF[src_index] = shared_AF[threadIdx.x];
-	AS[src_index] = shared_AS[threadIdx.x];
-	// printf("%d\n", shared_AF[threadIdx.x]);
+	AF[src_index] = AF[threadIdx.x];
+	AS[src_index] = AS[threadIdx.x];
+	// printf("%d\n", AF[threadIdx.x]);
 }
 
 unsigned int charToUInt(char c)
@@ -275,23 +294,23 @@ int main(int argc, const char **argv)
 
 	/****** GPU Execution ********/
 	// unsigned int* d_M;
-	unsigned int* d_AF;
-	unsigned int* d_AS;
-	// unsigned int* d_convText;
-	// unsigned int* d_convPattern;
+	// unsigned int* d_AF;
+	// unsigned int* d_AS;
+	unsigned int* d_convText;
+	unsigned int* d_convPattern;
 
 	// cudaMalloc(&d_M, t_len * sizeof(unsigned int));
-	cudaMalloc(&d_AF, t_len * sizeof(unsigned int));
-	cudaMalloc(&d_AS, t_len * sizeof(unsigned int));
+	// cudaMalloc(&d_AF, t_len * sizeof(unsigned int));
+	// cudaMalloc(&d_AS, t_len * sizeof(unsigned int));
 
-	// cudaMalloc(&d_convText, t_len * sizeof(unsigned int));
-	// cudaMalloc(&d_convPattern, p_len * sizeof(unsigned int));
+	cudaMalloc(&d_convText, t_len * sizeof(unsigned int));
+	cudaMalloc(&d_convPattern, p_len * sizeof(unsigned int));
 
 	cudaEvent_t start, stop;
 	cudaEvent_t start_small, stop_small;
 	float elapsedTime, elapsedTime_small;
 
-	for(int j = 0; j < t_len; j++)
+	/*for(int j = 0; j < t_len; j++)
 	{
 		M[j] = 0;
 		for (int i = 0; i < p_len; ++i)
@@ -315,20 +334,20 @@ int main(int argc, const char **argv)
 			AS[j] = M[j];
 		}
 		// cout << bitset<32>(M[j]) << endl;
-	}
+	}*/
 
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	cudaEventRecord(start,0);
 
-	cudaMemcpy(d_AF, AF, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-	cudaMemcpy(d_AS, AS, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_convText, convText, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_convPattern, convPattern, p_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
 
 	cudaEventCreate(&start_small);
 	cudaEventCreate(&stop_small);
 	cudaEventRecord(start_small,0);
 
-	shiftOR_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_AF, d_AS);
+	shiftOR_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_convText, t_len, d_convPattern, p_len);
 
 	cudaEventRecord(stop_small,0);
 	cudaEventSynchronize(stop_small);
@@ -351,11 +370,11 @@ int main(int argc, const char **argv)
 	delete [] AF;
 	delete [] AS;
 
-	// cudaFree(d_convText);
-	// cudaFree(d_convPattern);
+	cudaFree(d_convText);
+	cudaFree(d_convPattern);
 	// cudaFree(d_M);
-	cudaFree(d_AF);
-	cudaFree(d_AS);
+	// cudaFree(d_AF);
+	// cudaFree(d_AS);
 
 	return 0;
 }
