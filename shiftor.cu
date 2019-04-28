@@ -288,7 +288,8 @@ int main(int argc, const char **argv)
 	// cudaMalloc(&d_convPattern, p_len * sizeof(unsigned int));
 
 	cudaEvent_t start, stop;
-	float elapsedTime;
+	cudaEvent_t start_small, stop_small;
+	float elapsedTime, elapsedTime_small;
 
 	for(int j = 0; j < t_len; j++)
 	{
@@ -320,24 +321,29 @@ int main(int argc, const char **argv)
 	cudaEventCreate(&stop);
 	cudaEventRecord(start,0);
 
-	// cudaMemcpy(d_M, M, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_AF, AF, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
 	cudaMemcpy(d_AS, AS, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
 
-	// cudaMemcpy(d_convText, convText, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
-	// cudaMemcpy(d_convPattern, convPattern, p_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	cudaEventCreate(&start_small);
+	cudaEventCreate(&stop_small);
+	cudaEventRecord(start_small,0);
 
 	shiftOR_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_AF, d_AS);
 
-	cudaMemcpy(AF, d_AF, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(AS, d_AS, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	cudaEventRecord(stop_small,0);
+	cudaEventSynchronize(stop_small);
+	cudaEventElapsedTime(&elapsedTime_small, start_small,stop_small);
+
+	// cudaMemcpy(AF, d_AF, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	// cudaMemcpy(AS, d_AS, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
 	cudaEventRecord(stop,0);
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start,stop);
 
 	printf("GPU found %d matches	\n", count);
-	printf("GPU Time for matching keywords: %fms\n", elapsedTime);
+	printf("GPU Kernel Time for matching keywords: %fms\n", elapsedTime_small);
+	printf("GPU Total Time for matching keywords: %fms\n", elapsedTime);
 
 
 	delete [] convText;
