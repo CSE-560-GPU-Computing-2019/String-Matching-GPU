@@ -80,7 +80,7 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 		if(index < THREADS_PER_BLOCK)
 		{
 			unsigned int tempF = dagger1(AF[0][index], AS[0][index], AF[0][index-stride], AS[0][index-stride]);
-			unsigned int tempS = dagger1(AF[0][index], AS[0][index], AF[0][index-stride], AS[0][index-stride]);
+			unsigned int tempS = dagger2(AF[0][index], AS[0][index], AF[0][index-stride], AS[0][index-stride]);
 
 			AF[0][index] = tempF;
 			AS[0][index] = tempS;
@@ -97,7 +97,7 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 		if(index + stride < THREADS_PER_BLOCK)
 		{
 			unsigned int tempF = dagger1(AF[0][index+stride], AS[0][index+stride], AF[0][index], AS[0][index]);
-			unsigned int tempS = dagger1(AF[0][index+stride], AS[0][index+stride], AF[0][index], AS[0][index]);
+			unsigned int tempS = dagger2(AF[0][index+stride], AS[0][index+stride], AF[0][index], AS[0][index]);
 
 			AF[0][index] = tempF;
 			AS[0][index] = tempS;
@@ -105,9 +105,6 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 		stride = stride / 2;
 		__syncthreads();
 	}
-
-	AF[0][src_index] = AF[0][threadIdx.x];
-	AS[0][src_index] = AS[0][threadIdx.x];
 
 	unsigned int u = AF[0][tx];
 	unsigned int y = AS[0][tx];
@@ -170,10 +167,6 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 			stride = stride / 2;
 			__syncthreads();
 		}
-
-		AF[i][src_index] = AF[i][threadIdx.x];
-		AS[i][src_index] = AS[i][threadIdx.x];
-		AW[i][src_index] = AF[i][threadIdx.x];
 	}
 }
 

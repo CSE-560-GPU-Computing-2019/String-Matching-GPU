@@ -75,7 +75,7 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 		if(index < THREADS_PER_BLOCK)
 		{
 			unsigned int tempF = dagger1(AF[index], AS[index], AF[index-stride], AS[index-stride]);
-			unsigned int tempS = dagger1(AF[index], AS[index], AF[index-stride], AS[index-stride]);
+			unsigned int tempS = dagger2(AF[index], AS[index], AF[index-stride], AS[index-stride]);
 
 			AF[index] = tempF;
 			AS[index] = tempS;
@@ -92,7 +92,7 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 		if(index + stride < THREADS_PER_BLOCK)
 		{
 			unsigned int tempF = dagger1(AF[index+stride], AS[index+stride], AF[index], AS[index]);
-			unsigned int tempS = dagger1(AF[index+stride], AS[index+stride], AF[index], AS[index]);
+			unsigned int tempS = dagger2(AF[index+stride], AS[index+stride], AF[index], AS[index]);
 
 			AF[index] = tempF;
 			AS[index] = tempS;
@@ -360,8 +360,8 @@ int main(int argc, const char **argv)
 	cudaEventSynchronize(stop_small);
 	cudaEventElapsedTime(&elapsedTime_small, start_small,stop_small);
 
-	cudaMemcpy(convText, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
-	cudaMemcpy(convText, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	// cudaMemcpy(convText, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	// cudaMemcpy(convText, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 	// cudaMemcpy(AS, d_AS, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 
 	cudaEventRecord(stop,0);
