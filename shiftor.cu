@@ -36,7 +36,7 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 	__shared__ int AS[THREADS_PER_BLOCK];
 
 	if(threadIdx.x < p_len)
-	shared_convPattern[threadIdx.x] = convPattern[threadIdx.x];
+		shared_convPattern[threadIdx.x] = convPattern[threadIdx.x];
 
 	__syncthreads();
 
@@ -46,6 +46,8 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 		// printf("Thread: %d %d %d\n", threadIdx.x, src_index, t_len);
 
 	AF[threadIdx.x] = 1;
+	AS[threadIdx.x] = 0;
+
 	for (int i = 0; i < p_len; ++i)
 	{
 		if(convText[src_index] == shared_convPattern[i])
