@@ -251,7 +251,7 @@ int main(int argc, const char **argv)
 	#ifndef DEBUG
 		FILE *t_fp = fopen(argv[1],"r");
 	#else
-		FILE *t_fp = fopen("data/t_sample.txt", "r");
+		FILE *t_fp = fopen("data/t_vvl.txt", "r");
 	#endif
 	if (!t_fp)
 	{
@@ -309,9 +309,16 @@ int main(int argc, const char **argv)
 	// cout << p_len << endl;
 	// cout << pattern << endl;
 
-	unsigned int AF[MAXK][t_len];
-	unsigned int AS[MAXK][t_len];
-	unsigned int AW[MAXK][t_len];
+	unsigned int **AF = new unsigned int*[MAXK+1];
+	unsigned int **AS = new unsigned int*[MAXK+1];
+	unsigned int **AW = new unsigned int*[MAXK+1];
+
+	for(int i = 0; i < MAXK+1; i++)
+	{
+		AF[i] = new unsigned int[t_len];
+		AS[i] = new unsigned int[t_len];
+		AW[i] = new unsigned int[t_len];
+	}
 
 	unsigned int* convText = new unsigned int[t_len];
 	mapStringToInt(text, convText, t_len);
@@ -383,7 +390,7 @@ int main(int argc, const char **argv)
 
 
 	wuManber_halo_GPU <<<((t_len%streamcount)/(THREADS_PER_BLOCK)) + 1, THREADS_PER_BLOCK, 0, streams[streamcount]>>>(t_len%streamcount, 1, d_AF, d_AS, d_AW, R, streamcount);
-	// cudaMemcpyAsync(, ,  * sizeof(unsigned int), cudaMemcpyDeviceToHost, &streams[i][0]);
+	// cudaMemcpyAsync(AS,d_AS, k * t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost, streams[streamcount]);
 
 	cudaDeviceSynchronize();
 
@@ -406,10 +413,10 @@ int main(int argc, const char **argv)
 	printf("GPU Total Time for matching keywords: %fms\n", elapsedTime);
 
 
-	// delete [] convText;
-	// delete [] AF;
-	// delete [] AS;
-	// delete [] AW;
+	delete [] convText;
+	delete [] AF;
+	delete [] AS;
+	delete [] AW;
 
 	cudaFree(d_convText);
 	cudaFree(d_convPattern);
