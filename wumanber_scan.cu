@@ -1,4 +1,5 @@
 #include <iostream>
+#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -14,8 +15,9 @@ using namespace std;
 #define ALPHABET_FINAL '~'
 #define ASIZE (int) (ALPHABET_FINAL - ALPHABET_INITIAL + 1)
 
-#define THREADS_PER_BLOCK 1024
+#define THREADS_PER_BLOCK 512
 #define MAX_P_LEN 32
+#define MAX_K 5
 
 __device__ unsigned int dagger1(unsigned int u1, unsigned int x1, unsigned int u2, unsigned int x2)
 {
@@ -40,9 +42,9 @@ __device__ unsigned int dagger4(unsigned int x1, unsigned int y1, unsigned int x
 __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *convPattern, int p_len, int k)
 {
 	__shared__ unsigned int shared_convPattern[MAX_P_LEN];
-	__shared__ unsigned int AF[k+1][THREADS_PER_BLOCK];
-	__shared__ unsigned int AS[k+1][THREADS_PER_BLOCK];
-	__shared__ unsigned int AW[k+1][THREADS_PER_BLOCK];
+	__shared__ unsigned int AF[MAX_K + 1][THREADS_PER_BLOCK];
+	__shared__ unsigned int AS[MAX_K + 1][THREADS_PER_BLOCK];
+	__shared__ unsigned int AW[MAX_K + 1][THREADS_PER_BLOCK];
 
 	unsigned int src_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -106,17 +108,14 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 		__syncthreads();
 	}
 
-	unsigned int u = AF[0][tx];
-	unsigned int y = AS[0][tx];
+	// __syncthreads();
 
-	__syncthreads();
-
-	unsigend int tempN = 0;
+	unsigned int tempN = 0;
 
 	for(int i = 1; i <= k; i++)
 	{
 		tempN = AF[i-1][tx-1] & (AF[i-1][tx-1] << 1) & (AF[i-1][tx] << 1);
-		__syncthreads();
+		// __syncthreads();
 
 		AW[i][0] = 0 << p_len;
 		AS[i][0] = 1 << (p_len - k);
@@ -138,8 +137,8 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 			if(index < THREADS_PER_BLOCK)
 			{
 				unsigned int tempF = dagger1(AF[i][index], AS[i][index], AF[i][index-stride], AS[i][index-stride]);
-				unsigned int tempW = dagger3(AW[i][index] << AF[i][index], AW[i][index-stride]);
-				unsigned int tempS = dagger4(AW[i][index] << AF[i][index], AS[i][index] << AF[i][index], AW[i][index-stride], AS[i][index-stride]);
+				unsigned int tempW = dagger3(AW[i][index] << AF[i][index-stride], AW[i][index-stride]);
+				unsigned int tempS = dagger4(AW[i][index] << AF[i][index-stride], AS[i][index] << AF[i][index-stride], AW[i][index-stride], AS[i][index-stride]);
 
 				AF[i][index] = tempF;
 				AS[i][index] = tempS;
@@ -157,8 +156,8 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 			if(index + stride < THREADS_PER_BLOCK)
 			{
 				unsigned int tempF = dagger1(AF[i][index+stride], AS[i][index+stride], AF[i][index], AS[i][index]);
-				unsigned int tempW = dagger3(AW[i][index+stride] << AF[i][index+stride], AW[i][index]);
-				unsigned int tempS = dagger4(AW[i][index+stride] << AF[i][index+stride], AS[i][index+stride] << AF[i][index+stride], AW[i][index], AS[i][index]);
+				unsigned int tempW = dagger3(AW[i][index+stride] << AF[i][index], AW[i][index]);
+				unsigned int tempS = dagger4(AW[i][index+stride] << AF[i][index], AS[i][index+stride] << AF[i][index], AW[i][index], AS[i][index]);
 
 				AF[i][index] = tempF;
 				AS[i][index] = tempS;
@@ -211,9 +210,9 @@ void mapStringToInt(char input[], unsigned int converted[], size_t length)
 int main(int argc, const char **argv)
 {
 	#ifndef DEBUG
-		if(argc != 3)
+		if(argc != 4)
 		{
-			printf("Usage: %s <path/to/text/file> <path/to/pattern/file>\n", argv[0]);
+			printf("Usage: %s <path/to/text/file> <path/to/pattern/file> <k = max error>\n", argv[0]);
 			exit(0);
 		}
 	#endif
@@ -239,6 +238,11 @@ int main(int argc, const char **argv)
 		printf("Unable to open pattern file.\n");
 		exit(0);
 	}
+	stringstream strValue;
+	strValue << argv[3];
+
+	int k;
+	strValue >> k;
 
 	size_t t_len = 0, p_len = 0;
 	while (getc(t_fp) != EOF)
@@ -274,15 +278,6 @@ int main(int argc, const char **argv)
 	fclose(t_fp);
 	fclose(p_fp);
 
-	// cout << t_len << endl;
-	// cout << text << endl;
-	// cout << p_len << endl;
-	// cout << pattern << endl;
-
-	unsigned int* M = new unsigned int[t_len];
-	unsigned int* AF = new unsigned int[t_len];
-	unsigned int* AS = new unsigned int[t_len];
-
 	unsigned int* convText = new unsigned int[t_len];
 	mapStringToInt(text, convText, t_len);
 
@@ -317,32 +312,6 @@ int main(int argc, const char **argv)
 	cudaEvent_t start_small, stop_small;
 	float elapsedTime, elapsedTime_small;
 
-	/*for(int j = 0; j < t_len; j++)
-	{
-		M[j] = 0;
-		for (int i = 0; i < p_len; ++i)
-		{
-			// printf("%u : %u\n", convText[j], convPattern[i]);
-			if(convText[j] == convPattern[i])
-				M[j] |= 1 << i;
-		}
-
-		M[j] = ~M[j];
-		// cout << ":: " << bitset<32>(M[j]) << endl;
-
-		if(j == 0)
-		{
-			AF[j] = 0;
-			AS[j] = ~0;
-		}
-		else
-		{
-			AF[j] = 1;
-			AS[j] = M[j];
-		}
-		// cout << bitset<32>(M[j]) << endl;
-	}*/
-
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	cudaEventRecord(start,0);
@@ -354,7 +323,7 @@ int main(int argc, const char **argv)
 	cudaEventCreate(&stop_small);
 	cudaEventRecord(start_small,0);
 
-	wuManber_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_convText, t_len, d_convPattern, p_len, 1);
+	wuManber_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_convText, t_len, d_convPattern, p_len, k);
 
 	cudaEventRecord(stop_small,0);
 	cudaEventSynchronize(stop_small);
@@ -367,15 +336,16 @@ int main(int argc, const char **argv)
 	cudaEventSynchronize(stop);
 	cudaEventElapsedTime(&elapsedTime, start,stop);
 
-	printf("GPU found %d matches	\n", count);
+	// printf("GPU found %d matches	\n", count);
 	printf("GPU Kernel Time for matching keywords: %fms\n", elapsedTime_small);
 	printf("GPU Total Time for matching keywords: %fms\n", elapsedTime);
 
 
 	delete [] convText;
-	delete [] M;
-	delete [] AF;
-	delete [] AS;
+	// delete [] M;
+	// delete [] AF;
+	// delete [] AS;
+	// delete [] AW;
 
 	cudaFree(d_convText);
 	cudaFree(d_convPattern);
