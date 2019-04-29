@@ -1,5 +1,4 @@
 #include <iostream>
-#include <sstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
@@ -15,9 +14,8 @@ using namespace std;
 #define ALPHABET_FINAL '~'
 #define ASIZE (int) (ALPHABET_FINAL - ALPHABET_INITIAL + 1)
 
-#define THREADS_PER_BLOCK 512
+#define THREADS_PER_BLOCK 1024
 #define MAX_P_LEN 32
-// #define STREAM_COUNT 20
 
 __device__ unsigned int dagger1(unsigned int u1, unsigned int x1, unsigned int u2, unsigned int x2)
 {
@@ -29,7 +27,7 @@ __device__ unsigned int dagger2(unsigned int u1, unsigned int x1, unsigned int u
 	return (x1 << u2) | x2;
 }
 
-__global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *convPattern, int p_len, unsigned int *d_AS, unsigned int *d_AF, int pos)
+__global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *convPattern, int p_len)
 {
 	unsigned int src_index = blockIdx.x * blockDim.x + threadIdx.x;
 
@@ -37,36 +35,43 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 	__shared__ int AF[THREADS_PER_BLOCK];
 	__shared__ int AS[THREADS_PER_BLOCK];
 
-	int tx = threadIdx.x;
-
-	if(tx < p_len)
-		shared_convPattern[tx] = convPattern[tx];
+	if(threadIdx.x < p_len)
+		shared_convPattern[threadIdx.x] = convPattern[threadIdx.x];
 
 	__syncthreads();
 
-	AF[tx] = 1;
-	AS[tx] = 0;
+	// printf("Hi. Pattern loaded.\n");
+
+	// if(src_index > t_len)
+		// printf("Thread: %d %d %d\n", threadIdx.x, src_index, t_len);
+
+	AF[threadIdx.x] = 1;
+	AS[threadIdx.x] = 0;
 
 	for (int i = 0; i < p_len; ++i)
 	{
 		if(convText[src_index] == shared_convPattern[i])
-			AS[tx] |= 1 << i;
+			AS[threadIdx.x] |= 1 << i;
 	}
 
-	AS[tx] = ~AS[tx];
+	AS[threadIdx.x] = ~AS[threadIdx.x];
 
-	if(tx == 0 && blockIdx.x == 0)
+	if(threadIdx.x == 0 && blockIdx.x == 0)
 	{
-		AF[tx] = 0;
-		AS[tx] = ~0;
+		AF[threadIdx.x] = 0;
+		AS[threadIdx.x] = ~0;
 	}
+
+	// if (threadIdx.x == THREADS_PER_BLOCK - 1)
+	// 	data[THREADS_PER_BLOCK * 1] = d_text[src_index + 1 * THREADS_PER_BLOCK - THREADS_PER_BLOCK + 1];
 
 	__syncthreads();
+
 
 	int stride = 1;
 	while(stride < THREADS_PER_BLOCK)
 	{
-		int index = (tx+1)*stride*2 - 1;
+		int index = (threadIdx.x+1)*stride*2 - 1;
 		if(index < THREADS_PER_BLOCK)
 		{
 			unsigned int tempF = dagger1(AF[index], AS[index], AF[index-stride], AS[index-stride]);
@@ -83,7 +88,7 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 	stride = THREADS_PER_BLOCK/4;
 	while(stride > 0)
 	{
-		int index = (tx+1)*stride*2 - 1;
+		int index = (threadIdx.x+1)*stride*2 - 1;
 		if(index + stride < THREADS_PER_BLOCK)
 		{
 			unsigned int tempF = dagger1(AF[index+stride], AS[index+stride], AF[index], AS[index]);
@@ -96,23 +101,10 @@ __global__ void shiftOR_GPU(unsigned int *convText, int t_len, unsigned int *con
 		__syncthreads();
 	}
 
-	d_AF[src_index] = AF[tx];
-	d_AS[src_index] = AS[tx];
-}
-
-__global__ void shiftOR_halo_GPU(int t_len, unsigned int *d_AF, unsigned int *d_AS, unsigned int *R, int pos)
-{
-	__shared__ unsigned int AF[THREADS_PER_BLOCK];
-	__shared__ unsigned int AS[THREADS_PER_BLOCK];
-	int tx = threadIdx.x;
-
-	unsigned int tempF = dagger1(d_AF[tx], d_AS[tx], d_AF[tx], d_AS[tx]);
-	unsigned int tempS = dagger2(d_AF[tx], d_AS[tx], d_AF[tx], d_AS[tx]);
-
-	AF[tx] = tempF;
-	AS[tx] = tempS;
-
-	R[tx] = AF[tx] + AS[tx];
+	// AF[src_index] = AF[threadIdx.x];
+	// AS[src_index] = AS[threadIdx.x];
+	// if(threadIdx.x < t_len)
+	// 	printf("%d\n", AF[threadIdx.x]);
 }
 
 unsigned int charToUInt(char c)
@@ -221,9 +213,9 @@ int shiftOR(unsigned int *pattern, int p_len, unsigned int *text, int t_len)
 int main(int argc, const char **argv)
 {
 	#ifndef DEBUG
-		if(argc != 4)
+		if(argc != 3)
 		{
-			printf("Usage: %s <path/to/text/file> <path/to/pattern/file> <number of streams>\n", argv[0]);
+			printf("Usage: %s <path/to/text/file> <path/to/pattern/file>\n", argv[0]);
 			exit(0);
 		}
 	#endif
@@ -231,7 +223,7 @@ int main(int argc, const char **argv)
 	#ifndef DEBUG
 		FILE *t_fp = fopen(argv[1],"r");
 	#else
-		FILE *t_fp = fopen("data/t_l.txt", "r");
+		FILE *t_fp = fopen("data/t_s.txt", "r");
 	#endif
 	if (!t_fp)
 	{
@@ -249,13 +241,6 @@ int main(int argc, const char **argv)
 		printf("Unable to open pattern file.\n");
 		exit(0);
 	}
-
-	// const char* value = "1234567";
-	stringstream strValue;
-	strValue << argv[3];
-
-	int STREAM_COUNT;
-	strValue >> STREAM_COUNT;
 
 	size_t t_len = 0, p_len = 0;
 	while (getc(t_fp) != EOF)
@@ -325,55 +310,41 @@ int main(int argc, const char **argv)
 
 
 	/****** GPU Execution ********/
-	unsigned int* d_AF;
-	unsigned int* d_AS;
+	// unsigned int* d_M;
+	// unsigned int* d_AF;
+	// unsigned int* d_AS;
 	unsigned int* d_convText;
 	unsigned int* d_convPattern;
-	unsigned int* R;
 
-	cudaMalloc(&d_AF, t_len * sizeof(unsigned int));
-	cudaMalloc(&d_AS, t_len * sizeof(unsigned int));
-	cudaMalloc(&R, t_len * sizeof(unsigned int));
+	// cudaMalloc(&d_M, t_len * sizeof(unsigned int));
+	// cudaMalloc(&d_AF, t_len * sizeof(unsigned int));
+	// cudaMalloc(&d_AS, t_len * sizeof(unsigned int));
 
-	cudaMalloc(&d_convText, t_len/STREAM_COUNT * sizeof(unsigned int));
+	cudaMalloc(&d_convText, t_len * sizeof(unsigned int));
 	cudaMalloc(&d_convPattern, p_len * sizeof(unsigned int));
 
 	cudaEvent_t start, stop;
-	float elapsedTime;
+	cudaEvent_t start_small, stop_small;
+	float elapsedTime, elapsedTime_small;
 
 	cudaEventCreate(&start);
 	cudaEventCreate(&stop);
 	cudaEventRecord(start,0);
 
-	cudaStream_t streams[STREAM_COUNT + 1];
+	cudaMemcpy(d_convText, convText, t_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
+	cudaMemcpy(d_convPattern, convPattern, p_len * sizeof(unsigned int), cudaMemcpyHostToDevice);
 
-	for(int i = 1; i <= STREAM_COUNT; i++)
-	{
-		cudaStreamCreateWithFlags(&streams[i], cudaStreamNonBlocking);
-		cudaMemcpyAsync(d_convText, convText + STREAM_COUNT * i, t_len/STREAM_COUNT * sizeof(unsigned int), cudaMemcpyHostToDevice, streams[i]);
-		shiftOR_GPU <<<(t_len/(THREADS_PER_BLOCK * STREAM_COUNT)) + 1, THREADS_PER_BLOCK, 0, streams[i]>>>(d_convText, t_len/STREAM_COUNT, d_convPattern, p_len, d_AF, d_AS, i);
-	}
+	cudaEventCreate(&start_small);
+	cudaEventCreate(&stop_small);
+	cudaEventRecord(start_small,0);
 
-	cudaStreamCreateWithFlags(&streams[STREAM_COUNT], cudaStreamNonBlocking);
-	cudaMemcpyAsync(d_convText, convText + (STREAM_COUNT * STREAM_COUNT), t_len%STREAM_COUNT * sizeof(unsigned int), cudaMemcpyHostToDevice, streams[STREAM_COUNT]);
-	shiftOR_GPU <<<((t_len%STREAM_COUNT)/(THREADS_PER_BLOCK)) + 1, THREADS_PER_BLOCK, 0, streams[STREAM_COUNT]>>>(d_convText, t_len%STREAM_COUNT, d_convPattern, p_len, d_AF, d_AS, STREAM_COUNT);
+	shiftOR_GPU <<<(t_len/THREADS_PER_BLOCK) + 1, THREADS_PER_BLOCK>>>(d_convText, t_len, d_convPattern, p_len);
 
-	cudaDeviceSynchronize();
+	cudaEventRecord(stop_small,0);
+	cudaEventSynchronize(stop_small);
+	cudaEventElapsedTime(&elapsedTime_small, start_small,stop_small);
 
-	for(int i = 1; i <= STREAM_COUNT; i++)
-	{
-		shiftOR_halo_GPU <<<(t_len/(THREADS_PER_BLOCK * STREAM_COUNT)) + 1, THREADS_PER_BLOCK, 0, streams[i]>>>(t_len/STREAM_COUNT, d_AF, d_AS, R, i-1);
-	}
-
-	shiftOR_halo_GPU <<<((t_len%STREAM_COUNT)/(THREADS_PER_BLOCK)) + 1, THREADS_PER_BLOCK, 0, streams[STREAM_COUNT]>>>(t_len%STREAM_COUNT, d_AF, d_AS, R, STREAM_COUNT);
-
-	cudaDeviceSynchronize();
-
-	for(int i = 1; i <= STREAM_COUNT; i++)
-		cudaStreamDestroy(streams[i]);
-
-	// cudaMemcpy(convText, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
-	// cudaMemcpy(M, R, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
+	// cudaMemcpy(M, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 	// countZero(M, t_len, count);
 
 	cudaEventRecord(stop,0);
@@ -381,6 +352,7 @@ int main(int argc, const char **argv)
 	cudaEventElapsedTime(&elapsedTime, start,stop);
 
 	printf("GPU found %d matches	\n", count);
+	printf("GPU Kernel Time for matching keywords: %fms\n", elapsedTime_small);
 	printf("GPU Total Time for matching keywords: %fms\n", elapsedTime);
 
 
@@ -391,6 +363,9 @@ int main(int argc, const char **argv)
 
 	cudaFree(d_convText);
 	cudaFree(d_convPattern);
+	// cudaFree(d_M);
+	// cudaFree(d_AF);
+	// cudaFree(d_AS);
 
 	return 0;
 }
