@@ -347,6 +347,8 @@ int main(int argc, const char **argv)
 
 	cudaStream_t streams[STREAM_COUNT + 1];
 
+	cudaHostRegister(convText, t_len * sizeof(unsigned int), 0);
+
 	for(int i = 1; i <= STREAM_COUNT; i++)
 	{
 		cudaStreamCreateWithFlags(&streams[i], cudaStreamNonBlocking);
@@ -371,6 +373,8 @@ int main(int argc, const char **argv)
 
 	for(int i = 1; i <= STREAM_COUNT; i++)
 		cudaStreamDestroy(streams[i]);
+
+	cudaHostUnregister(convText);
 
 	// cudaMemcpy(convText, d_convText, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
 	// cudaMemcpy(M, R, t_len * sizeof(unsigned int), cudaMemcpyDeviceToHost);
