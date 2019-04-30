@@ -14,7 +14,7 @@ using namespace std;
 #define ALPHABET_INITIAL ' '
 #define ALPHABET_FINAL '~'
 #define ASIZE (int) (ALPHABET_FINAL - ALPHABET_INITIAL + 1)
-
+#define shift(x) 1 << (31 - x)
 #define THREADS_PER_BLOCK 512
 #define MAX_P_LEN 32
 #define MAX_K 5
@@ -169,6 +169,69 @@ __global__ void wuManber_GPU(unsigned int *convText, int t_len, unsigned int *co
 	}
 }
 
+int WuManber(char *pattern, int p_len, char *text, int t_len, int k)
+{
+	// cout << t_len << endl;
+	// cout << text << endl;
+	// cout << p_len << endl;
+	// cout << pattern << endl;
+	// cout << cas << endl;
+
+	unsigned int ctr = 0;
+	unsigned long alphabets[256];
+
+	for(int i = 0; i < 256; i++)
+	{
+		alphabets[i] = ~0;
+	}
+
+	for(int i = 0 ; i < p_len; i++)
+	{
+		alphabets[pattern[i]] = alphabets[pattern[i]] & ~(1UL << i);
+	}
+
+	unsigned long R[k+1];
+
+	for(int i = 0; i <= k; i++)
+		R[i] = ~1;
+
+	unsigned long temptextstore, temperrorstore;
+
+	for (int i = 0; i < t_len; i++)
+	{
+		temptextstore = R[0];
+
+		R[0] = (R[0] | alphabets[text[i]]) << 1;
+
+		for(int j = 1; j <= k; j++)
+		{
+			temperrorstore = R[j];
+
+			R[j] |= alphabets[text[i]];
+			R[j] &= temptextstore;
+			R[j] <<= 1;
+
+			temptextstore = (((R[j] << 1) | shift(0)) & alphabets[text[i]]) |
+					  (R[j-1] |
+					  (R[j] << 1) |
+					  (R[j-1] << 1)) ;
+
+			temptextstore ^= (temperrorstore ^ temptextstore);
+			temptextstore = temperrorstore;
+		}
+
+		temptextstore = 1UL << p_len;
+		temptextstore &= R[k];
+
+		if((~temptextstore) == -1)
+		{
+			ctr += 1;
+			// cout<<(i + 1 - p_len)<<endl;
+		}
+	}
+	return ctr;
+}
+
 unsigned int charToUInt(char c)
 {
 	return (unsigned int) (c - ALPHABET_INITIAL);
@@ -284,6 +347,12 @@ int main(int argc, const char **argv)
 	unsigned int convPattern[p_len];
 	mapStringToInt(pattern, convPattern, p_len);
 
+	const clock_t begin_time = clock();
+	int count = WuManber(pattern, p_len, text, t_len, k);
+	float runTime = (float)( clock() - begin_time ) /  CLOCKS_PER_SEC;
+
+	printf("CPU Time for matching keywords: %fms\n\n", runTime*1000);
+
 	free(text);
 	free(pattern);
 
@@ -340,6 +409,7 @@ int main(int argc, const char **argv)
 	printf("GPU Kernel Time for matching keywords: %fms\n", elapsedTime_small);
 	printf("GPU Total Time for matching keywords: %fms\n", elapsedTime);
 
+	printf("Total found %d matches with an edit distance of upto %u characters\n", count, k);
 
 	delete [] convText;
 	// delete [] M;
