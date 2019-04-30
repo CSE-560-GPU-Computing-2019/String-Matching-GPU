@@ -1,10 +1,10 @@
-./shiftor data/t_s.txt data/p_sample.txt
+./wumanber data/t_vvl.txt data/p_sample.txt 1 1
 echo
-./shiftor data/t_m.txt data/p_sample.txt
+./wumanber data/t_vvl.txt data/p_sample.txt 1 2
 echo
-./shiftor data/t_l.txt data/p_sample.txt
+./wumanber data/t_vvl.txt data/p_sample.txt 1 4
 echo
-./shiftor data/t_vl.txt data/p_sample.txt
+./wumanber data/t_vvl.txt data/p_sample.txt 1 8
 echo
-./shiftor data/t_vvl.txt data/p_sample.txt
+./wumanber data/t_vvl.txt data/p_sample.txt 1 16
 echo
